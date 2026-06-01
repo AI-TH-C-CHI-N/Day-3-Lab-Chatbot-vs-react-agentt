@@ -2,7 +2,7 @@
 chatbot.py — runnable n8n workflow-builder agent.
 
 Wires together:
-    LLM (OpenAIProvider)                        -> the brain
+    LLM provider (OpenAI/Gemini/Local)          -> the brain
     system prompt (src/agent/system_prompt.txt) -> loaded by ReActAgent.get_system_prompt()
     n8n tools (src/n8n/tools.py)                 -> the hands (validate/compile/create/... workflows)
     ReActAgent (src/agent/agent.py)              -> the Thought/Action/Observation loop
@@ -11,22 +11,24 @@ Run:
     python chatbot.py            # interactive chat (describe a workflow, 'quit' to exit)
 
 Environment (.env):
-    OPENAI_API_KEY   required                        -> the LLM
+    OPENAI_API_KEY / GEMINI_API_KEY or LOCAL_MODEL_PATH -> the LLM
     N8N_API_KEY      required to deploy workflows     -> n8n REST API auth
     N8N_BASE_URL     optional (default http://localhost:5678/api/v1)
     DEFAULT_MODEL    optional (default gpt-4o)
+    DEFAULT_PROVIDER optional (openai | google | local)
 """
 
 import os
 import sys
-from typing import Optional
 
 from dotenv import load_dotenv
 
-# Make `src` importable when running this file directly from the repo root.
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Make `src` importable when running this file directly from its new location.
+# Append the repository root (three levels up) so `from src...` still works.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.agent.agent import ReActAgent
+from src.core.provider_factory import build_llm_from_env
 from src.n8n.tools import create_n8n_tools
 from src.n8n.client import N8nClient
 
@@ -44,22 +46,15 @@ def build_agent() -> ReActAgent:
     get_system_prompt() already reads src/agent/system_prompt.txt, so the system
     prompt is wired up by construction.
     """
-    from src.core.openai_provider import OpenAIProvider
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        print("OPENAI_API_KEY is missing or still the placeholder in .env.")
+    try:
+        llm = build_llm_from_env()
+    except Exception as e:
+        print(f"No usable LLM provider found: {e}")
         sys.exit(1)
-
-    model_name = os.getenv("DEFAULT_MODEL", "gpt-4o")
-    if model_name.startswith("gemini"):  # .env may carry a non-OpenAI model name
-        model_name = "gpt-4o"
 
     if not os.getenv("N8N_API_KEY"):
         print("⚠️  N8N_API_KEY not set — offline tools work, but create/activate/get/")
         print("    delete will fail with an auth error until you set it in .env.\n")
-
-    llm = OpenAIProvider(model_name=model_name, api_key=api_key)
 
     base_url = os.getenv("N8N_BASE_URL", "http://localhost:5678/api/v1")
     client = N8nClient(base_url=base_url, api_key=os.getenv("N8N_API_KEY") or "offline-no-key")

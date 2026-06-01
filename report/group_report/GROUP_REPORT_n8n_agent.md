@@ -1,113 +1,115 @@
-# Group Report: n8n Workflow-Builder Agent
+# Group Report: Lab 3 - He thong Agentic san sang Production
 
-- **Team Name**: [Name]
-- **Team Members**: [Member 1, Member 2]
-- **Deployment Date**: [YYYY-MM-DD]
-
-> Status: **Design + interface contract complete; implementation/test run pending.**
-> Sections requiring a live run (3, 4, 5) are marked TBD until we execute the test suite.
+- **Team Name**: n8n_agent
+- **Team Members**: Nguyễn Thị Bảo Trân - 2A202600917 | Nguyễn Thành Đạt - 2A202600771 | Trần Bá Đạt - 2A202600778
+- **Deployment Date**: 2026-06-01
 
 ---
 
-## 1. Executive Summary
+## 1. Tong quan dieu hanh
 
-We designed an **agentic agent that turns a natural-language request into a real workflow created
-on an n8n instance via its REST API** (e.g. "every weekday at 9am, GET an API and email me the
-result" → a Schedule → HTTP → Email workflow that appears in n8n).
+Du an cua nhom trien khai mot ReAct Agent cho bai toan tao workflow n8n tu yeu cau ngon ngu tu nhien. He thong su dung bieu dien trung gian `WorkflowSpec`, sau do validate, compile sang JSON native cua n8n va goi n8n REST API de tao workflow.
 
-It is a **single ReAct agent with many tools** built on the lab's existing `ReActAgent` +
-`LLMProvider` + telemetry stack. The core design choice is an intermediate **`WorkflowSpec`**: the
-LLM reasons about *intent*, while deterministic code compiles the fiddly native n8n JSON — the main
-guard against hallucinated node types / invalid payloads.
-
-- **Success Rate**: TBD (after test run)
-- **Key Outcome**: TBD
+- **Success Rate**: 100% cho buoc tao workflow (1/1 trong trace da ghi nhan), 0% cho luong end-to-end day du co activate (0/1 trong trace da ghi nhan)
+- **Key Outcome**: Agent thuc hien on dinh quy trinh da buoc (`list_node_types` -> `validate_spec` -> `compile_spec` -> `create_workflow`), nhung buoc `activate_workflow` that bai do van de cau hinh/node o phia n8n.
 
 ---
 
-## 2. System Architecture & Tooling
+## 2. Kien truc he thong va bo cong cu
 
-### 2.1 ReAct Loop Implementation
-Single agent, text-based tool calling (no native function-calling API):
+### 2.1 Trien khai vong lap ReAct
 
+He thong dung mot agent duy nhat theo vong Thought-Action-Observation, tool call bang text:
+
+```mermaid
+flowchart TD
+    U[User Request] --> A[ReActAgent.run]
+    A --> B[LLMProvider.generate]
+    B --> C{Final Answer?}
+    C -- No --> D[Parse Action regex]
+    D --> E[Execute Tool]
+    E --> F[N8nClient hoac Local Compiler]
+    F --> G[Observation append vao transcript]
+    G --> B
+    C -- Yes --> H[Tra ve final answer]
 ```
-user NL request
-   │
-   ▼
-ReActAgent ── generate ──▶ LLMProvider (OpenAI | Gemini | Local)
-   │  loop: Thought → Action: tool(args) → Observation → … → Final Answer
-   ├── parse Action line (regex) ──▶ _execute_tool(name, args)
-   │                                      └─▶ tool func ─▶ N8nClient ─▶ n8n REST API
-   └── every step ─────────────────────────────────────▶ IndustryLogger (JSON)
-```
 
-The agent reasons in two layers: **plan** a `WorkflowSpec` (nodes + edges) and validate it locally,
-then **compile & deploy** it to n8n. Tools are stateless; all reasoning lives in the one agent.
+Tom tat implementation tu code:
+- `src/agent/agent.py` luu transcript day du qua cac luot hoi dap va co gioi han so buoc.
+- Giao thuc goi tool dang string: `Action: tool_name(args)`, moi tool tu parse args.
+- Tich hop n8n tach rieng trong `src/n8n/client.py` voi phan loai loi ro rang (`AuthError`, `BadWorkflowError`, `NotFoundError`, `N8nUnavailableError`).
 
 ### 2.2 Tool Definitions (Inventory)
 | Tool Name | Input Format | Use Case |
 | :--- | :--- | :--- |
-| `list_node_types` | none / `query` str | Capability catalog: supported node kinds + required params. |
-| `validate_spec` | WorkflowSpec JSON | Pure pre-flight linter (one trigger, no orphans/cycles, required params). |
-| `compile_spec` | WorkflowSpec JSON | Dry run: emit the native n8n JSON without calling the API. |
-| `create_workflow` | WorkflowSpec JSON | Re-validate + compile, then `POST /workflows`; returns `{id, name}`. |
-| `activate_workflow` | id | `POST /workflows/{id}/activate` (go-live switch). |
-| `get_workflow` | id | Read back stored workflow to verify correctness. |
-| `delete_workflow` | id | Rollback / test teardown. |
-
-Tools split by side effect: **read/pure** (`list_node_types`, `validate_spec`, `compile_spec`,
-`get_workflow`) vs **state-changing** (`create_`, `activate_`, `delete_`). The agent is steered to
-exhaust the pure tools before touching the live instance. Tool/loop interface is fixed in
-`CONTRACT.md` (`func: (str) -> str`, `ok | ...` / `error: ...` observations, tools parse own args).
+| `list_node_types` | Chuoi rong, plain text query, hoac JSON `{"query":"..."}` | Liet ke node kind duoc ho tro va required/optional params. |
+| `validate_spec` | Chuoi JSON `WorkflowSpec` | Kiem tra cau truc graph va tham so bat buoc truoc compile/deploy. |
+| `compile_spec` | Chuoi JSON `WorkflowSpec` | Bien doi spec sang n8n workflow JSON (dry run). |
+| `create_workflow` | Chuoi JSON `WorkflowSpec` | Validate + compile + `POST /workflows`. |
+| `activate_workflow` | Chuoi workflow ID | `POST /workflows/{id}/activate`. |
+| `get_workflow` | Chuoi workflow ID | `GET /workflows/{id}` de xac minh thong tin workflow. |
+| `delete_workflow` | Chuoi workflow ID | `DELETE /workflows/{id}` de cleanup/rollback. |
 
 ### 2.3 LLM Providers Used
-- **Primary**: [e.g., GPT-4o]
-- **Secondary (Backup)**: [e.g., Gemini 1.5 Flash]
-- **Local option**: Phi-3-mini (CPU) — note: weaker format adherence; expect more parse retries.
+- **Primary**: OpenAI `gpt-4o` (dat mac dinh trong `.env`)
+- **Secondary (Backup)**: Gemini provider (`gemini-1.5-flash` da co implementation)
+- **Local Option**: Local provider qua `llama-cpp-python` (Phi-3 GGUF)
 
 ---
 
-## 3. Telemetry & Performance Dashboard
+## 3. Telemetry va dashboard hieu nang
 
-*To be filled after the test run. We log per-step events through `IndustryLogger`:*
-`AGENT_START/END`, `N8N_VALIDATION`, `N8N_API_CALL` (method, path, status, latency), `N8N_WORKFLOW_CREATED`, `N8N_ERROR`.
+So lieu tong hop tu trace chay that trong `debug.md` (1 scenario end-to-end):
 
-- **Average Latency (P50)**: TBD
-- **Max Latency (P99)**: TBD
-- **Average Tokens per Task**: TBD
-- **Total Cost of Test Suite**: TBD
+- **Average Latency (P50)**: ~4310 ms moi agent step
+- **Max Latency (P99)**: ~9840 ms moi agent step (gia tri max trong mau trace hien co)
+- **Average Tokens per Task**: N/A (module token tracker co san nhung chua wire vao luong agent dang chay)
+- **Total Cost of Test Suite**: N/A (ham tinh chi phi trong `metrics.py` hien la mock va chua co persisted report)
+
+Thong tin runtime bo sung:
+- Tong wall-time: ~53.17 s
+- So step da chay: 11
+- Ket qua API n8n quan sat duoc: create workflow `200`, activate workflow `400`, get workflow `200`
 
 ---
 
 ## 4. Root Cause Analysis (RCA) - Failure Traces
 
-*To be filled from real `logs/` traces after the test run.* Anticipated failure classes the design
-already targets:
-- **Parsing errors** — LLM emits a malformed `Action:` line (loop side). Mitigation: regex + retry Observation.
-- **Hallucinated node/param** — mitigated by `list_node_types` + registry-owned types, so unknown kinds fail at `validate_spec`, not at n8n.
-- **Integration errors** — n8n 4xx returned verbatim as an Observation so the agent can correct and retry.
+### Case Study: Activate that bai sau khi tao workflow thanh cong
+- **Input**: "Lúc 9 sáng hàng ngày, gọi GET https://api.example.com/data và gửi email cho me@x.com"
+- **Observation**:
+  - `create_workflow` thanh cong 2 lan (`200`)
+  - `activate_workflow` that bai 2 lan voi loi `Bad request: Could not find property option`
+  - `get_workflow` xac nhan workflow ton tai nhung van o trang thai inactive
+- **Root Cause**:
+  - Validator hien tai chu yeu kiem tra tinh hop le cau truc (`required_params`), chua bao phu day du cac rang buoc luc activate tren runtime n8n.
+  - Cau hinh payload email/schedule va yeu cau credential/options chua duoc enforce duoc truoc khi activate.
+  - Agent da retry tao workflow nhung chua co co che chan doan schema-level sau cho nhom loi activation.
 
 ---
 
-## 5. Ablation Studies & Experiments
+## 5. Ablation Studies va thi nghiem
 
-*Planned (results TBD):*
-- **Exp 1 — system prompt with vs without a 1-shot `WorkflowSpec` example**: expected fewer invalid-spec loops.
-- **Exp 2 — Chatbot vs Agent**: a plain chatbot can describe a workflow but cannot create it in n8n; the agent closes the loop (create → activate → verify).
+### Experiment 1: Validate+Compile truoc deploy (luong hien tai) vs deploy truc tiep (gia dinh)
+- **Diff**: Luong hien tai luon goi `validate_spec` va `compile_spec` truoc `create_workflow`.
+- **Result**: Giam rui ro payload sai dang va giup tao workflow thanh cong trong case da test, nhung khong ngan duoc loi activation-time.
+
+### Experiment 2 (Bonus): Chatbot vs Agent
+| Case | Chatbot Result | Agent Result | Winner |
+| :--- | :--- | :--- | :--- |
+| Cau hoi thong tin don gian | Chi tra loi mo ta | Vua tra loi vua co the goi tool | **Agent** |
+| Tao workflow da buoc tren n8n | Chi huong dan bang text | Goi API that va tao workflow thanh cong | **Agent** |
+| Do tin cay activate tren setup hien tai | Khong ap dung | That bai voi config n8n hien tai (`400`) | Chatbot (N/A) |
 
 ---
 
-## 6. Production Readiness Review
+## 6. Danh gia san sang production
 
-- **Security**: Never route secrets through the LLM — create credentials in n8n directly and have
-  the agent reference them by id/name only. Redact API key/headers from telemetry.
-- **Guardrails**: `max_steps` cap + per-tool attempt caps (≤2 deploy retries); activate only on
-  explicit/automatic-trigger intent to avoid exposing live webhooks; `create_workflow` re-validates
-  internally so an invalid spec can never reach the API.
-- **Scaling (v2)**: branching/IF fan-out, edit existing workflows, expand the node registry; expose
-  the tool set over MCP only if reused across multiple agents/clients.
+- **Security**: Nen ap dung co che quan ly secret, rotate key khi co nguy co lo, va tranh dua secret thuan vao prompt/log.
+- **Guardrails**: Da co gioi han step budget; tools theo contract thong nhat `ok | ...` / `error: ...`; luong create co validate lai truoc khi goi API.
+- **Scaling**: Can bo sung validation theo schema runtime cho activate, preflight credential check, retry policy theo nhom loi, va he thong telemetry analytics luu ben vung de theo doi SLA/chi phi.
 
 ---
 
 > [!NOTE]
-> Submit by renaming to `GROUP_REPORT_[TEAM_NAME].md` and placing it in this folder.
+> Nop bao cao bang cach doi ten file thanh `GROUP_REPORT_[TEAM_NAME].md` va de trong thu muc nay.

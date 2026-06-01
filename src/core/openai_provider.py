@@ -1,3 +1,4 @@
+import os
 import time
 from typing import Dict, Any, Optional, Generator
 from openai import OpenAI
@@ -6,7 +7,9 @@ from src.core.llm_provider import LLMProvider
 class OpenAIProvider(LLMProvider):
     def __init__(self, model_name: str = "gpt-4o", api_key: Optional[str] = None):
         super().__init__(model_name, api_key)
-        self.client = OpenAI(api_key=self.api_key)
+        # Avoid hanging indefinitely on network stalls when calling OpenAI.
+        timeout_seconds = float(os.getenv("OPENAI_TIMEOUT", "30"))
+        self.client = OpenAI(api_key=self.api_key, timeout=timeout_seconds)
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
         start_time = time.time()

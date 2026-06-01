@@ -15,6 +15,24 @@ cp .env.example .env
 pip install -r requirements.txt
 ```
 
+### 2.1 Run Both Versions (Chatbot vs ReAct Agent)
+
+Baseline chatbot (no tools):
+```bash
+python src/agent/baseline_chatbot.py
+```
+
+ReAct n8n agent (tool-using):
+```bash
+python src/agent/chatbot.py
+```
+
+Provider selection is controlled via `.env`:
+```env
+DEFAULT_PROVIDER=openai  # openai | google | local
+DEFAULT_MODEL=gpt-4o
+```
+
 ### 3. Directory Structure
 - `src/tools/`: Extension point for your custom tools.
 
@@ -43,7 +61,7 @@ LOCAL_MODEL_PATH=./models/Phi-3-mini-4k-instruct-q4.gguf
 2.  **ReAct Loop**: Implement the `Thought-Action-Observation` cycle in `src/agent/agent.py`.
 3.  **Provider Switching**: Swap between OpenAI and Gemini seamlessly using the `LLMProvider` interface.
 4.  **Failure Analysis**: Use the structured logs in `logs/` to identify why the agent fails (hallucinations, parsing errors).
-5.  **Grading & Bonus**: Follow the [SCORING.md](file:///Users/tindt/personal/ai-thuc-chien/day03-lab-agent/SCORING.md) to maximize your points and explore bonus metrics.
+5.  **Grading & Bonus**: Follow the `SCORING.md` file in this repository to maximize your points and explore bonus metrics.
 
 ## 🛠️ How to Use This Baseline
 The code is designed as a **Production Prototype**. It includes:

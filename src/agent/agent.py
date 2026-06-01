@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from src.core.llm_provider import LLMProvider
 from src.telemetry.logger import logger
 
@@ -74,6 +74,8 @@ class ReActAgent:
         self.transcript += f"Question: {user_input}\n"
         steps = 0
         final_answer = None
+        last_error = None
+        repeated_error_count = 0
 
         while steps < self.max_steps:
             steps += 1
@@ -97,19 +99,37 @@ class ReActAgent:
                 break
 
             # 3. Parse the Action line. (Loop passes args VERBATIM — no json parsing here.)
-            action_match = re.search(r"Action:\s*(\w+)\((.*)\)", text, re.DOTALL)
-            if not action_match:
+            parsed_action = self._parse_action(text)
+            if not parsed_action:
                 # No Action and no Final Answer — nudge the model back on format.
                 observation = "error: could not parse Action line. Use 'Action: tool_name(<args>)' or 'Final Answer: ...'."
                 self.transcript += text + f"\nObservation: {observation}\n"
                 continue
 
-            tool_name = action_match.group(1).strip()
-            args = action_match.group(2).strip()
+            tool_name, args = parsed_action
 
             # 4. Dispatch the tool and append the real Observation.
             observation = self._execute_tool(tool_name, args)
             logger.log_event("TOOL_CALL", {"tool": tool_name, "args": args, "observation": observation})
+
+            # Prevent wasting the full step budget when the same tool error repeats.
+            if observation.startswith("error:"):
+                if observation == last_error:
+                    repeated_error_count += 1
+                else:
+                    repeated_error_count = 1
+                last_error = observation
+
+                if repeated_error_count >= 2:
+                    final_answer = (
+                        "I encountered the same tool error repeatedly and stopped to avoid a loop: "
+                        f"{observation}. Please adjust inputs/config and try again."
+                    )
+                    self.transcript += text + f"\nObservation: {observation}\nFinal Answer: {final_answer}\n"
+                    break
+            else:
+                last_error = None
+                repeated_error_count = 0
 
             self.transcript += text + f"\nObservation: {observation}\n"
 
@@ -142,3 +162,56 @@ class ReActAgent:
                 except Exception as e:  # contract says func should never raise, but be safe
                     return f"error: tool '{tool_name}' crashed: {e}"
         return f"error: tool '{tool_name}' not found"
+
+    def _parse_action(self, text: str) -> Optional[Tuple[str, str]]:
+        """
+        Parse `Action: tool_name(args)` robustly, including multiline args and nested parentheses.
+        Returns (tool_name, args) or None.
+        """
+        marker = re.search(r"Action:\s*", text)
+        if not marker:
+            return None
+
+        remainder = text[marker.end():]
+        name_match = re.match(r"\s*`?([A-Za-z_]\w*)`?\s*\(", remainder)
+        if not name_match:
+            return None
+
+        tool_name = name_match.group(1)
+        idx = name_match.end()
+        depth = 1
+        in_string = False
+        string_char = ""
+        escape = False
+        arg_chars = []
+
+        while idx < len(remainder):
+            ch = remainder[idx]
+
+            if in_string:
+                arg_chars.append(ch)
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == string_char:
+                    in_string = False
+            else:
+                if ch in ('"', "'"):
+                    in_string = True
+                    string_char = ch
+                    arg_chars.append(ch)
+                elif ch == "(":
+                    depth += 1
+                    arg_chars.append(ch)
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0:
+                        return tool_name, "".join(arg_chars).strip()
+                    arg_chars.append(ch)
+                else:
+                    arg_chars.append(ch)
+
+            idx += 1
+
+        return None
