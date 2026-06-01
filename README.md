@@ -27,6 +27,11 @@ ReAct n8n agent (tool-using):
 python src/agent/chatbot.py
 ```
 
+Main entrypoint used by the lab instructions:
+```bash
+python main.py
+```
+
 Provider selection is controlled via `.env`:
 ```env
 DEFAULT_PROVIDER=openai  # openai | google | local
@@ -35,6 +40,26 @@ DEFAULT_MODEL=gpt-4o
 
 ### 3. Directory Structure
 - `src/tools/`: Extension point for your custom tools.
+
+### 4. Travel Planner Use Case
+The agent can be demoed as a Travel Planner assistant that builds n8n workflows for:
+- fetching flight or hotel prices on a schedule
+- filtering results with HTTP and Set nodes
+- sending itinerary updates by email
+- activating the workflow only after validation passes
+
+This use case shows the difference between a plain chatbot answer and a tool-using agent that can actually orchestrate a workflow.
+
+### 5. Core Tools
+The lab focuses on these six core tools:
+1. list_node_types - discover supported node kinds and parameters
+2. validate_spec - validate the intermediate WorkflowSpec
+3. compile_spec - compile WorkflowSpec into native n8n JSON
+4. create_workflow - create a workflow in n8n
+5. activate_workflow - activate the workflow after creation
+6. get_workflow - inspect the workflow state and verify deployment
+
+Optional cleanup tooling is also available through delete_workflow.
 
 ## 🏠 Running with Local Models (CPU)
 

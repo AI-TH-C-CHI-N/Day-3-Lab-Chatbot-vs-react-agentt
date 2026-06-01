@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chatbot vs ReAct Agent Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Serif+Display:ital@0;1&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="page-bg" aria-hidden="true"></div>
+
+    <header class="site-header">
+        <a class="brand" href="#">ReAct Lab</a>
+        <nav class="main-nav" aria-label="Main navigation">
+            <a href="#features">Features</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#cases">Use Cases</a>
+            <a href="chat.html">Chat</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Chatbot vs ReAct Agent</p>
+                <h1>Compare a direct chatbot with a tool-using n8n agent.</h1>
+                <p class="lead">
+                    This lab demonstrates a baseline chatbot, a ReAct loop, provider switching,
+                    and telemetry for reasoning traces. The UI is now aligned to the actual project.
+                </p>
+                <div class="hero-actions">
+                    <a class="btn btn-primary" href="chat.html">Open Chat</a>
+                    <a class="btn btn-secondary" href="#features">See Features</a>
+                </div>
+            </div>
+
+            <aside class="hero-card" id="preview" aria-label="Project preview">
+                <h2>Project Snapshot</h2>
+                <ul>
+                    <li><span>Baseline</span><strong>Chatbot</strong></li>
+                    <li><span>Advanced</span><strong>ReAct Agent</strong></li>
+                    <li><span>Tools</span><strong>n8n workflow ops</strong></li>
+                    <li><span>Telemetry</span><strong>Logs + Metrics</strong></li>
+                </ul>
+                <p class="status success">Status: ready to compare reasoning, tool use, and provider behavior.</p>
+            </aside>
+        </section>
+
+        <section class="feature-grid" id="features" aria-label="Core features">
+            <article class="feature-card">
+                <h3>Baseline Chatbot</h3>
+                <p>One-shot LLM answers for simple questions without tool calls.</p>
+            </article>
+            <article class="feature-card">
+                <h3>ReAct Loop</h3>
+                <p>Thought, Action, Observation flow with strict tool parsing and guardrails.</p>
+            </article>
+            <article class="feature-card">
+                <h3>Provider Switching</h3>
+                <p>Swap between OpenAI, Gemini, and local models via one factory.</p>
+            </article>
+            <article class="feature-card">
+                <h3>Telemetry & Metrics</h3>
+                <p>Track latency, tokens, and cost to compare agent behavior across runs.</p>
+            </article>
+        </section>
+
+        <section class="plans" id="architecture" aria-label="Suggested architecture">
+            <h2>Architecture Summary</h2>
+            <div class="plan-list">
+                <article class="plan-card">
+                    <p class="plan-tag">Frontend</p>
+                    <h3>Static HTML + CSS</h3>
+                    <p>Landing page and chat UI served directly from the backend service.</p>
+                </article>
+                <article class="plan-card">
+                    <p class="plan-tag">Backend</p>
+                    <h3>HTTP API Service</h3>
+                    <p>Routes requests to chatbot or ReAct agent and exposes health/metrics endpoints.</p>
+                </article>
+                <article class="plan-card">
+                    <p class="plan-tag">Agent</p>
+                    <h3>Tool-Using ReAct Core</h3>
+                    <p>Uses the real `src/` runtime for n8n workflows and reasoning traces.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="plans" id="cases" aria-label="Example prompts">
+            <h2>Example Prompts</h2>
+            <div class="plan-list">
+                <article class="plan-card">
+                    <p class="plan-tag">Simple</p>
+                    <h3>What is a ReAct agent?</h3>
+                    <p>Use chatbot mode for a direct explanation.</p>
+                </article>
+                <article class="plan-card">
+                    <p class="plan-tag">Workflow</p>
+                    <h3>Create a daily email workflow</h3>
+                    <p>Use agent mode to inspect tools, validate, and compile a spec.</p>
+                </article>
+                <article class="plan-card">
+                    <p class="plan-tag">Compare</p>
+                    <h3>OpenAI vs Gemini</h3>
+                    <p>Run the same prompt with different providers and compare outputs.</p>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>Chatbot vs ReAct Agent Lab</p>
+    </footer>
+</body>
+
+</html>
